@@ -109,8 +109,6 @@ pub struct InputPartialEq {
 pub struct InputPartialOrd {
     /// The `bound` attribute if present and the corresponding bounds.
     bounds: Option<Vec<syn::WherePredicate>>,
-    /// Allow `derivative(PartialOrd)` on enums:
-    on_enum: bool,
 }
 
 #[derive(Debug, Default)]
@@ -118,8 +116,6 @@ pub struct InputPartialOrd {
 pub struct InputOrd {
     /// The `bound` attribute if present and the corresponding bounds.
     bounds: Option<Vec<syn::WherePredicate>>,
-    /// Allow `derivative(Ord)` on enums:
-    on_enum: bool,
 }
 
 #[derive(Debug, Default)]
@@ -344,9 +340,7 @@ impl Input {
                     let Some(partial_ord) = input.partial_ord;
                     for value in values;
                     "bound" => parse_bound(&mut partial_ord.bounds, value, errors),
-                    "feature_allow_slow_enum" => {
-                        partial_ord.on_enum = parse_boolean_meta_item(value, true, "feature_allow_slow_enum", errors);
-                    }
+                    "feature_allow_slow_enum" => (), // backward compatibility, now unnecessary
                 }
             }
             "Ord" => {
@@ -355,9 +349,7 @@ impl Input {
                     let Some(ord) = input.ord;
                     for value in values;
                     "bound" => parse_bound(&mut ord.bounds, value, errors),
-                    "feature_allow_slow_enum" => {
-                        ord.on_enum = parse_boolean_meta_item(value, true, "feature_allow_slow_enum", errors);
-                    }
+                    "feature_allow_slow_enum" => (), // backward compatibility, now unnecessary
                 }
             }
             unknown => {
@@ -431,14 +423,6 @@ impl Input {
         self.ord
             .as_ref()
             .and_then(|d| d.bounds.as_ref().map(Vec::as_slice))
-    }
-
-    pub fn partial_ord_on_enum(&self) -> bool {
-        self.partial_ord.as_ref().map_or(false, |d| d.on_enum)
-    }
-
-    pub fn ord_on_enum(&self) -> bool {
-        self.ord.as_ref().map_or(false, |d| d.on_enum)
     }
 }
 

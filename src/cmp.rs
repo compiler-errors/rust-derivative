@@ -106,20 +106,32 @@ pub fn derive_partial_eq(input: &ast::Input) -> proc_macro2::TokenStream {
 }
 
 /// Derive `PartialOrd` for `input`.
-pub fn derive_partial_ord(
-    input: &ast::Input,
-    errors: &mut proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    if let ast::Body::Enum(_) = input.body {
-        if !input.attrs.partial_ord_on_enum() {
-            let message = "can't use `#[derivative(PartialOrd)]` on an enumeration without \
-            `feature_allow_slow_enum`; see the documentation for more details";
-            errors.extend(syn::Error::new(input.span, message).to_compile_error());
-        }
-    }
-
+pub fn derive_partial_ord(input: &ast::Input) -> proc_macro2::TokenStream {
     let option_path = option_path();
     let ordering_path = ordering_path();
+
+    let discr_cmp = if let ast::Body::Enum(variants) = &input.body {
+        let arms = variants.iter().map(|arm| {
+            let ident = &input.ident;
+            let variant_ident = &arm.ident;
+            let discriminant = arm.discriminant;
+            quote!(#ident::#variant_ident { .. } => #discriminant)
+        });
+        quote! {
+            let __variant_of = |x: &Self| -> u128 {
+                match x {
+                    #(#arms,)*
+                }
+            };
+            let __variant_of_self = __variant_of(self);
+            let __variant_of_other = __variant_of(other);
+            if __variant_of_self != __variant_of_other {
+                return __variant_of_self.partial_cmp(&__variant_of_other);
+            }
+        }
+    } else {
+        quote!({})
+    };
 
     let body = matcher::Matcher::new(matcher::BindingStyle::Ref, input.attrs.is_packed)
         .with_field_filter(|f: &ast::Field| !f.attrs.ignore_partial_ord())
@@ -200,6 +212,7 @@ pub fn derive_partial_ord(
         #[allow(clippy::unneeded_field_pattern)]
         impl #impl_generics #partial_ord_trait_path for #name #ty_generics #where_clause {
             fn partial_cmp(&self, other: &Self) -> #option_path<#ordering_path> {
+                #discr_cmp
                 match *self {
                     #body
                 }
@@ -209,19 +222,31 @@ pub fn derive_partial_ord(
 }
 
 /// Derive `Ord` for `input`.
-pub fn derive_ord(
-    input: &ast::Input,
-    errors: &mut proc_macro2::TokenStream,
-) -> proc_macro2::TokenStream {
-    if let ast::Body::Enum(_) = input.body {
-        if !input.attrs.ord_on_enum() {
-            let message = "can't use `#[derivative(Ord)]` on an enumeration without \
-            `feature_allow_slow_enum`; see the documentation for more details";
-            errors.extend(syn::Error::new(input.span, message).to_compile_error());
-        }
-    }
-
+pub fn derive_ord(input: &ast::Input) -> proc_macro2::TokenStream {
     let ordering_path = ordering_path();
+
+    let discr_cmp = if let ast::Body::Enum(variants) = &input.body {
+        let arms = variants.iter().map(|arm| {
+            let ident = &input.ident;
+            let variant_ident = &arm.ident;
+            let discriminant = arm.discriminant;
+            quote!(#ident::#variant_ident { .. } => #discriminant)
+        });
+        quote! {
+            let __variant_of = |x: &Self| -> u128 {
+                match x {
+                    #(#arms,)*
+                }
+            };
+            let __variant_of_self = __variant_of(self);
+            let __variant_of_other = __variant_of(other);
+            if __variant_of_self != __variant_of_other {
+                return __variant_of_self.cmp(&__variant_of_other);
+            }
+        }
+    } else {
+        quote!({})
+    };
 
     let body = matcher::Matcher::new(matcher::BindingStyle::Ref, input.attrs.is_packed)
         .with_field_filter(|f: &ast::Field| !f.attrs.ignore_ord())
@@ -297,6 +322,7 @@ pub fn derive_ord(
         #[allow(clippy::unneeded_field_pattern)]
         impl #impl_generics #ord_trait_path for #name #ty_generics #where_clause {
             fn cmp(&self, other: &Self) -> #ordering_path {
+                #discr_cmp
                 match *self {
                     #body
                 }

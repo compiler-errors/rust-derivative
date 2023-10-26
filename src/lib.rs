@@ -58,10 +58,10 @@ fn derive_impls(
         tokens.extend(cmp::derive_partial_eq(input));
     }
     if input.attrs.partial_ord.is_some() {
-        tokens.extend(cmp::derive_partial_ord(input, errors));
+        tokens.extend(cmp::derive_partial_ord(input));
     }
     if input.attrs.ord.is_some() {
-        tokens.extend(cmp::derive_ord(input, errors));
+        tokens.extend(cmp::derive_ord(input));
     }
 
     tokens.extend(std::mem::replace(errors, Default::default()));
