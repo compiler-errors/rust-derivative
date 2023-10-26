@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use attr;
 use proc_macro2;
 use syn;
@@ -24,6 +26,7 @@ pub struct Variant<'a> {
     pub fields: Vec<Field<'a>>,
     pub ident: syn::Ident,
     pub style: Style,
+    pub discriminant: u128,
 }
 
 #[derive(Debug)]
@@ -113,15 +116,38 @@ fn enum_from_ast<'a>(
     variants: &'a syn::punctuated::Punctuated<syn::Variant, syn::token::Comma>,
     errors: &mut proc_macro2::TokenStream,
 ) -> Result<Vec<Variant<'a>>, ()> {
+    let mut seen = HashSet::new();
+    let mut counter = 0;
     variants
         .iter()
         .map(|variant| {
             let (style, fields) = struct_from_ast(&variant.fields, errors)?;
+            let discriminant = if let Some((_, lit)) = &variant.discriminant {
+                if let syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Int(discr),
+                    ..
+                }) = lit
+                {
+                    let discr = discr.base10_parse().map_err(|_| ())?;
+                    if seen.insert(discr) {
+                        discr
+                    } else {
+                        Err(())?
+                    }
+                } else {
+                    Err(())?
+                }
+            } else {
+                (counter..).find(|idx| seen.insert(*idx)).ok_or(())?
+            };
+            counter = discriminant + 1;
+
             Ok(Variant {
                 attrs: attr::Input::from_ast(&variant.attrs, errors)?,
                 fields,
                 ident: variant.ident.clone(),
                 style,
+                discriminant,
             })
         })
         .collect()
