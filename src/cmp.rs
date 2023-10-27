@@ -109,15 +109,18 @@ pub fn derive_partial_eq(input: &ast::Input) -> proc_macro2::TokenStream {
 pub fn derive_partial_ord(input: &ast::Input) -> proc_macro2::TokenStream {
     let option_path = option_path();
     let ordering_path = ordering_path();
+    let mut less = quote!(#option_path::Some(#ordering_path::Less));
+    let mut greater = quote!(#option_path::Some(#ordering_path::Greater));
+    let mut discr_cmp = quote!({});
 
-    let discr_cmp = if let ast::Body::Enum(variants) = &input.body {
+    if let ast::Body::Enum(variants) = &input.body {
         let arms = variants.iter().map(|arm| {
             let ident = &input.ident;
             let variant_ident = &arm.ident;
             let discriminant = arm.discriminant;
             quote!(#ident::#variant_ident { .. } => #discriminant)
         });
-        quote! {
+        discr_cmp = quote! {
             let __variant_of = |x: &Self| -> u128 {
                 match x {
                     #(#arms,)*
@@ -128,10 +131,10 @@ pub fn derive_partial_ord(input: &ast::Input) -> proc_macro2::TokenStream {
             if __variant_of_self != __variant_of_other {
                 return __variant_of_self.partial_cmp(&__variant_of_other);
             }
-        }
-    } else {
-        quote!({})
-    };
+        };
+        less = quote! { unreachable!() };
+        greater = quote! { unreachable!() };
+    }
 
     let body = matcher::Matcher::new(matcher::BindingStyle::Ref, input.attrs.is_packed)
         .with_field_filter(|f: &ast::Field| !f.attrs.ignore_partial_ord())
@@ -140,12 +143,8 @@ pub fn derive_partial_ord(input: &ast::Input) -> proc_macro2::TokenStream {
                 .with_field_filter(|f: &ast::Field| !f.attrs.ignore_partial_ord())
                 .build_arms(input, "__other", |_, m, _, _, _, inner_bis| {
                     match n.cmp(&m) {
-                        ::std::cmp::Ordering::Less => {
-                            quote!(#option_path::Some(#ordering_path::Less))
-                        }
-                        ::std::cmp::Ordering::Greater => {
-                            quote!(#option_path::Some(#ordering_path::Greater))
-                        }
+                        ::std::cmp::Ordering::Less => less.clone(),
+                        ::std::cmp::Ordering::Greater => greater.clone(),
                         ::std::cmp::Ordering::Equal => {
                             let equal_path = quote!(#ordering_path::Equal);
                             outer_bis
@@ -224,15 +223,18 @@ pub fn derive_partial_ord(input: &ast::Input) -> proc_macro2::TokenStream {
 /// Derive `Ord` for `input`.
 pub fn derive_ord(input: &ast::Input) -> proc_macro2::TokenStream {
     let ordering_path = ordering_path();
+    let mut less = quote!(#ordering_path::Less);
+    let mut greater = quote!(#ordering_path::Greater);
+    let mut discr_cmp = quote!({});
 
-    let discr_cmp = if let ast::Body::Enum(variants) = &input.body {
+    if let ast::Body::Enum(variants) = &input.body {
         let arms = variants.iter().map(|arm| {
             let ident = &input.ident;
             let variant_ident = &arm.ident;
             let discriminant = arm.discriminant;
             quote!(#ident::#variant_ident { .. } => #discriminant)
         });
-        quote! {
+        discr_cmp = quote! {
             let __variant_of = |x: &Self| -> u128 {
                 match x {
                     #(#arms,)*
@@ -243,10 +245,10 @@ pub fn derive_ord(input: &ast::Input) -> proc_macro2::TokenStream {
             if __variant_of_self != __variant_of_other {
                 return __variant_of_self.cmp(&__variant_of_other);
             }
-        }
-    } else {
-        quote!({})
-    };
+        };
+        less = quote! { unreachable!() };
+        greater = quote! { unreachable!() };
+    }
 
     let body = matcher::Matcher::new(matcher::BindingStyle::Ref, input.attrs.is_packed)
         .with_field_filter(|f: &ast::Field| !f.attrs.ignore_ord())
@@ -255,8 +257,8 @@ pub fn derive_ord(input: &ast::Input) -> proc_macro2::TokenStream {
                 .with_field_filter(|f: &ast::Field| !f.attrs.ignore_ord())
                 .build_arms(input, "__other", |_, m, _, _, _, inner_bis| {
                     match n.cmp(&m) {
-                        ::std::cmp::Ordering::Less => quote!(#ordering_path::Less),
-                        ::std::cmp::Ordering::Greater => quote!(#ordering_path::Greater),
+                        ::std::cmp::Ordering::Less => less.clone(),
+                        ::std::cmp::Ordering::Greater => greater.clone(),
                         ::std::cmp::Ordering::Equal => {
                             let equal_path = quote!(#ordering_path::Equal);
                             outer_bis

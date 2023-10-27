@@ -646,7 +646,10 @@ struct MetaItem<'a>(
 );
 
 /// Parse an arbitrary item for our limited `MetaItem` subset.
-fn read_items<'a>(item: &'a syn::NestedMeta, errors: &mut proc_macro2::TokenStream) -> Result<MetaItem<'a>, ()> {
+fn read_items<'a>(
+    item: &'a syn::NestedMeta,
+    errors: &mut proc_macro2::TokenStream,
+) -> Result<MetaItem<'a>, ()> {
     let item = match *item {
         syn::NestedMeta::Meta(ref item) => item,
         syn::NestedMeta::Lit(ref lit) => {
