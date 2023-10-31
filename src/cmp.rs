@@ -41,7 +41,7 @@ pub fn derive_partial_eq(input: &ast::Input) -> proc_macro2::TokenStream {
     let discriminant_cmp = if let ast::Body::Enum(_) = input.body {
         let discriminant_path = paths::discriminant_path();
 
-        quote!((#discriminant_path(&*self) == #discriminant_path(&*other)))
+        quote!((#discriminant_path(self) == #discriminant_path(other)))
     } else {
         quote!(true)
     };
@@ -69,20 +69,28 @@ pub fn derive_partial_eq(input: &ast::Input) -> proc_macro2::TokenStream {
                 (input, "__self"),
                 (input, "__other"),
                 |_, _, _, (left_variant, right_variant)| {
-                    let cmp = left_variant.iter().zip(&right_variant).map(|(o, i)| {
+                    let cmp = left_variant.iter().zip(&right_variant).fold(None, |acc, (o, i)| {
                         let outer_name = &o.expr;
                         let inner_name = &i.expr;
 
                         if o.field.attrs.ignore_partial_eq() {
-                            None
-                        } else if let Some(compare_fn) = o.field.attrs.partial_eq_compare_with() {
-                            Some(quote!(&& #compare_fn(&#outer_name, &#inner_name)))
-                        } else {
-                            Some(quote!(&& &#outer_name == &#inner_name))
+                            return acc;
                         }
+                        
+                        let cmp = if let Some(compare_fn) = o.field.attrs.partial_eq_compare_with() {
+                            quote!(#compare_fn(&#outer_name, &#inner_name))
+                        } else {
+                            quote!(#outer_name == #inner_name)
+                        };
+
+                        Some(if let Some(acc) = acc {
+                            quote!(#acc && #cmp)
+                        } else {
+                            cmp
+                        })
                     });
 
-                    quote!(true #(#cmp)*)
+                    cmp.unwrap_or(quote!(true))
                 },
             )
     };
