@@ -14,6 +14,8 @@ use ast;
 use attr;
 use quote;
 
+use crate::paths::unreachable_path;
+
 /// The type of binding to use when generating a pattern.
 #[derive(Debug, Copy, Clone)]
 pub enum BindingStyle {
@@ -177,10 +179,11 @@ impl<T: Fn (&ast::Field) -> bool> Matcher<T> {
                 quote!((#left_pat, #right_pat) => { #body }).to_tokens(&mut t);
             }
 
+            let unreachable_path = unreachable_path();
             quote! {
                 match (&#left_matched_expr, &#right_matched_expr) {
                     #t
-                    _ => unreachable!(),
+                    _ => unsafe { #unreachable_path() },
                 }
             }
         }
